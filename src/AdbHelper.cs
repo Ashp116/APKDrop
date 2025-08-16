@@ -9,7 +9,7 @@ public class AdbDevice
     public string Model {get; set;}
 }
 
-public static class AdbHealper
+public static class AdbHelper
 {
     public static List<AdbDevice> ListDevices()
     {

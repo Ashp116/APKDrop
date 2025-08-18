@@ -65,7 +65,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Update="\src\adb\**\*.*">
+        <None Include="src\adb\**\*.*">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
     </ItemGroup>

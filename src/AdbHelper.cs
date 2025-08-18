@@ -11,10 +11,9 @@ public class AdbDevice
 
 public static class AdbHelper
 {
+    public static string adbPath = Path.Combine(AppContext.BaseDirectory, "src" , "adb", "adb.exe");
     public static List<AdbDevice> ListDevices()
     {
-        var adbPath = Path.Combine(AppContext.BaseDirectory, "adb", "adb.exe");
-
         if (!File.Exists(adbPath))
             throw new FileNotFoundException("adb.exe not found.", adbPath);
 
@@ -66,8 +65,6 @@ public static class AdbHelper
     
     public static bool PushAppInstall(string serial, string apkPath)
     {
-        var adbPath = Path.Combine(AppContext.BaseDirectory, "adb", "adb.exe");
-
         if (!File.Exists(adbPath))
             throw new FileNotFoundException("adb.exe not found.", adbPath);
 

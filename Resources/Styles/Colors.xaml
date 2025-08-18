@@ -6,18 +6,19 @@
 
     <!-- Note: For Android please see also Platforms\Android\Resources\values\colors.xml -->
 
-    <Color x:Key="Primary">#512BD4</Color>
-    <Color x:Key="PrimaryDark">#ac99ea</Color>
-    <Color x:Key="PrimaryDarkText">#242424</Color>
-    <Color x:Key="Secondary">#DFD8F7</Color>
-    <Color x:Key="SecondaryDarkText">#9880e5</Color>
-    <Color x:Key="Tertiary">#2B0B98</Color>
+    <Color x:Key="Primary">#27ae60</Color>            <!-- Vibrant Green -->
+    <Color x:Key="PrimaryDark">#1e8449</Color>        <!-- Darker Green -->
+    <Color x:Key="PrimaryDarkText">#e0ffe0</Color>    <!-- Light green text on dark -->
+    <Color x:Key="Secondary">#2ecc71</Color>          <!-- Soft Green -->
+    <Color x:Key="SecondaryDarkText">#27ae60</Color>  <!-- Medium Green -->
+    <Color x:Key="Tertiary">#145A32</Color>           <!-- Deep Green -->
 
-    <Color x:Key="White">White</Color>
-    <Color x:Key="Black">Black</Color>
-    <Color x:Key="Magenta">#D600AA</Color>
-    <Color x:Key="MidnightBlue">#190649</Color>
-    <Color x:Key="OffBlack">#1f1f1f</Color>
+    <Color x:Key="White">#ffffff</Color>
+    <Color x:Key="Black">#000000</Color>
+    <Color x:Key="Lime">#00ff88</Color>            <!-- Optional bright accent -->
+    <Color x:Key="NearBlack">#0c0c0c</Color>       <!-- Near black for depth -->
+    <Color x:Key="OffBlack">#1a1a1a</Color>           <!-- Slightly lighter black -->
+
 
     <Color x:Key="Gray100">#E1E1E1</Color>
     <Color x:Key="Gray200">#C8C8C8</Color>
@@ -27,6 +28,11 @@
     <Color x:Key="Gray600">#404040</Color>
     <Color x:Key="Gray900">#212121</Color>
     <Color x:Key="Gray950">#141414</Color>
+    
+    <Color x:Key="SelectedBackgroundColor">#218F4D</Color> <!-- Selected Color -->
+    <Color x:Key="DeselectedBackgroundColor">#2c2c2c</Color> <!-- Deselected Color -->
+    <Color x:Key="SelectedBorderColor">#195329</Color> <!-- Selected Border Color -->
+    <Color x:Key="DeselectedBorderColor">#444444</Color> <!-- Deselected Border Color -->
 
     <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource Primary}"/>
     <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource Secondary}"/>

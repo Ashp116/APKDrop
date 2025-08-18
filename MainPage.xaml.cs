@@ -41,28 +41,14 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
     {
         InitializeComponent();
         BindingContext = this;
-        LoadConnectedDevices();
-    }
-
-    public async Task LoadDataAsync()
-    {
-        try
+        
+        Device.StartTimer(TimeSpan.FromSeconds(1), () =>
         {
-            IsLoading = true;
-            LoadingProgress = 0;
-
-            for (int i = 1; i <= 10; i++)
-            {
-                await Task.Delay(300); // simulate work
-                LoadingProgress = i / 10.0;
-            }
-        }
-        finally
-        {
-            IsLoading = false;
-        }
+            LoadConnectedDevices();
+            return true;
+        });
     }
-
+    
     private async void OnSelectApkClicked(object sender, EventArgs e)
     {
         var result = await FilePicker.PickAsync(new PickOptions
@@ -124,19 +110,36 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
 
     private void LoadConnectedDevices()
     {
-        var adbDevices = AdbHelper.ListDevices(); // your ADB helper method
-        Devices.Clear();
+        var adbDevices = AdbHelper.ListDevices();
 
         foreach (var device in adbDevices)
         {
-            Devices.Add(new DeviceInfo
+            var existingDevice = Devices.FirstOrDefault(d => d.Serial == device.SerialNumber);
+            if (existingDevice != null)
             {
-                Serial = device.SerialNumber,
-                DeviceName = device.DeviceName,
-                Model = device.Model
-            });
+                existingDevice.DeviceName = device.DeviceName;
+                existingDevice.Model = device.Model;
+            }
+            else
+            {
+                Devices.Add(new DeviceInfo
+                {
+                    Serial = device.SerialNumber,
+                    DeviceName = device.DeviceName,
+                    Model = device.Model
+                });
+            }
+        }
+
+        for (int i = Devices.Count - 1; i >= 0; i--)
+        {
+            if (!adbDevices.Any(d => d.SerialNumber == Devices[i].Serial))
+            {
+                Devices.RemoveAt(i);
+            }
         }
     }
+
 
     private void OnSelectAllClicked(object sender, EventArgs e)
     {

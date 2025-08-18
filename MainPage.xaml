@@ -4,134 +4,173 @@
              BackgroundColor="{DynamicResource BackgroundColor}"
              Title="APK Drop">
 
-    <Grid RowDefinitions="Auto, Auto, Auto, Auto, *"
+    <Grid>
+        <Grid RowDefinitions="Auto, Auto, Auto, Auto, *"
           Padding="20">
 
-        <!-- Buttons -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,*" ColumnSpacing="10">
-            <Button 
-                Grid.Column="0"
-                Text="Select APK"
-                Clicked="OnSelectApkClicked"
-                BackgroundColor="{DynamicResource AccentColor}"
-                TextColor="{DynamicResource BackgroundColor}"
-                FontAttributes="Bold"
-                CornerRadius="8"
-                HeightRequest="50"
-                HorizontalOptions="FillAndExpand" />
-            <Button 
-                x:Name="PushButton"
-                Grid.Column="1"
-                Text="Push"
-                Clicked="OnPushClicked"
-                BackgroundColor="{DynamicResource AccentColor}"
-                TextColor="{DynamicResource BackgroundColor}"
-                FontAttributes="Bold"
-                CornerRadius="8"
-                HeightRequest="50"
-                HorizontalOptions="FillAndExpand" 
-                IsEnabled="False" />
+            <!-- Buttons -->
+            <Grid Grid.Row="0" ColumnDefinitions="*,*" ColumnSpacing="10">
+                <Button 
+                    Grid.Column="0"
+                    Text="Select APK"
+                    Clicked="OnSelectApkClicked"
+                    BackgroundColor="{DynamicResource AccentColor}"
+                    TextColor="{DynamicResource BackgroundColor}"
+                    FontAttributes="Bold"
+                    CornerRadius="8"
+                    HeightRequest="50"
+                    HorizontalOptions="FillAndExpand" />
+                <Button 
+                    x:Name="PushButton"
+                    Grid.Column="1"
+                    Text="Push"
+                    Clicked="OnPushClicked"
+                    BackgroundColor="{DynamicResource AccentColor}"
+                    TextColor="{DynamicResource BackgroundColor}"
+                    FontAttributes="Bold"
+                    CornerRadius="8"
+                    HeightRequest="50"
+                    HorizontalOptions="FillAndExpand" 
+                    IsEnabled="False" />
+            </Grid>
+
+            <!-- APK Path -->
+            <Label Grid.Row="1"
+                   x:Name="ApkPathLabel"
+                   Text="No APK selected."
+                   FontSize="12"
+                   TextColor="{DynamicResource TextSecondaryColor}"
+                   LineBreakMode="WordWrap"
+                   Margin="0,10,0,0" />
+
+            <!-- Section Title + Buttons -->
+            <Grid Grid.Row="2" ColumnDefinitions="*, Auto, Auto, Auto" VerticalOptions="Center">
+                <Label Text="Connected Devices:"
+                       FontAttributes="Bold"
+                       FontSize="16"
+                       TextColor="{DynamicResource AccentColor}" />
+
+                <Button Grid.Column="1"
+                        Text="Select All"
+                        Clicked="OnSelectAllClicked"
+                        Padding="10,0"
+                        FontSize="12"
+                        HorizontalOptions="End"
+                        BackgroundColor="Transparent"
+                        TextColor="{DynamicResource AccentColor}" />
+
+                <Button Grid.Column="2"
+                        Text="Deselect All"
+                        Clicked="OnDeselectAllClicked"
+                        Padding="10,0"
+                        FontSize="12"
+                        HorizontalOptions="End"
+                        BackgroundColor="Transparent"
+                        TextColor="{DynamicResource AccentColor}" />
+                
+                <Button Grid.Column="3"
+                        Text="Refresh"
+                        Clicked="OnRefreshClicked"
+                        Padding="10,0"
+                        FontSize="12"
+                        HorizontalOptions="End"
+                        BackgroundColor="Transparent"
+                        TextColor="{DynamicResource AccentColor}"
+                        />
+            </Grid>
+
+
+            <!-- Devices List -->
+            <CollectionView Grid.Row="4"
+                            x:Name="DevicesListView"
+                            ItemsSource="{Binding Devices}"
+                            SelectionMode="None"
+                            VerticalOptions="FillAndExpand">
+                <CollectionView.ItemsLayout>
+                    <GridItemsLayout Orientation="Vertical"
+                                     Span="2"
+                                     HorizontalItemSpacing="5"
+                                     VerticalItemSpacing="5" />
+                </CollectionView.ItemsLayout>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Frame Padding="15"
+                               Margin="5"
+                               CornerRadius="10"
+                               HasShadow="True"
+                               BackgroundColor="{Binding BackgroundColor}"
+                               BorderColor="{Binding BorderColor}">
+                            <HorizontalStackLayout Spacing="20"  
+                                                   VerticalOptions="Center"
+                                                   HorizontalOptions="FillAndExpand">
+                                <Image Source="device_icon.png"
+                                       HeightRequest="60"
+                                       WidthRequest="60"
+                                       VerticalOptions="Center"
+                                       HorizontalOptions="Start"
+                                       Aspect="AspectFit"/>
+                                <VerticalStackLayout VerticalOptions="Center"
+                                                     HorizontalOptions="StartAndExpand"
+                                                     Spacing="10" 
+                                                     Margin="10,0,0,0">
+    
+                                    <Label Text="{Binding DeviceName}"
+                                           FontAttributes="Bold"
+                                           FontSize="16"
+                                           TextColor="{DynamicResource AccentColor}"
+                                           HorizontalOptions="Start" 
+                                           LineBreakMode="TailTruncation"
+                                           MaxLines="1" />
+
+                                    <!-- Serial and Model side by side -->
+                                    <HorizontalStackLayout Spacing="20" VerticalOptions="Center">
+                                        <!-- Serial with bold value -->
+                                        <Label FontSize="14" TextColor="{DynamicResource TextSecondaryColor}">
+                                            <Label.FormattedText>
+                                                <FormattedString>
+                                                    <Span Text="Serial: " FontAttributes="Bold"/>
+                                                    <Span Text="{Binding Serial}" />
+                                                </FormattedString>
+                                            </Label.FormattedText>
+                                        </Label>
+
+                                        <!-- Model with bold value -->
+                                        <Label FontSize="14" TextColor="{DynamicResource TextSecondaryColor}">
+                                            <Label.FormattedText>
+                                                <FormattedString>
+                                                    <Span Text="Model: " FontAttributes="Bold" />
+                                                    <Span Text="{Binding Model}" />
+                                                </FormattedString>
+                                            </Label.FormattedText>
+                                        </Label>
+                                    </HorizontalStackLayout>
+                                </VerticalStackLayout>
+
+                            </HorizontalStackLayout>
+
+                            <Frame.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnDeviceTapped" />
+                            </Frame.GestureRecognizers>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
         </Grid>
+        
+        <Grid x:Name="LoadingOverlay"
+              BackgroundColor="#80000000" 
+              IsVisible="{Binding IsLoading}"
+              VerticalOptions="Fill"
+              HorizontalOptions="Fill">
 
-        <!-- APK Path -->
-        <Label Grid.Row="1"
-               x:Name="ApkPathLabel"
-               Text="No APK selected."
-               FontSize="12"
-               TextColor="{DynamicResource TextSecondaryColor}"
-               LineBreakMode="WordWrap"
-               Margin="0,10,0,0" />
+            <StackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="10">
+                <ActivityIndicator IsRunning="True" WidthRequest="60" HeightRequest="60"/>
+                <Label Text="Loading..." TextColor="White" HorizontalTextAlignment="Center"/>
+                <ProgressBar Progress="{Binding LoadingProgress}"
+                             WidthRequest="200"
+                             HeightRequest="6" />
+            </StackLayout>
 
-        <!-- Section Title + Buttons -->
-        <Grid Grid.Row="2" ColumnDefinitions="*, Auto, Auto, Auto" VerticalOptions="Center">
-            <Label Text="Connected Devices:"
-                   FontAttributes="Bold"
-                   FontSize="16"
-                   TextColor="{DynamicResource AccentColor}" />
-
-            <Button Grid.Column="1"
-                    Text="Select All"
-                    Clicked="OnSelectAllClicked"
-                    Padding="10,0"
-                    FontSize="12"
-                    HorizontalOptions="End"
-                    BackgroundColor="Transparent"
-                    TextColor="{DynamicResource AccentColor}" />
-
-            <Button Grid.Column="2"
-                    Text="Deselect All"
-                    Clicked="OnDeselectAllClicked"
-                    Padding="10,0"
-                    FontSize="12"
-                    HorizontalOptions="End"
-                    BackgroundColor="Transparent"
-                    TextColor="{DynamicResource AccentColor}" />
-            
-            <Button Grid.Column="3"
-                    Text="Refresh"
-                    Clicked="OnRefreshClicked"
-                    Padding="10,0"
-                    FontSize="12"
-                    HorizontalOptions="End"
-                    BackgroundColor="Transparent"
-                    TextColor="{DynamicResource AccentColor}"
-                    />
         </Grid>
-
-
-        <!-- Devices List -->
-        <CollectionView Grid.Row="4"
-                        x:Name="DevicesListView"
-                        ItemsSource="{Binding Devices}"
-                        SelectionMode="None"
-                        VerticalOptions="FillAndExpand">
-            <CollectionView.ItemsLayout>
-                <GridItemsLayout Orientation="Vertical"
-                                 Span="2"
-                                 HorizontalItemSpacing="5"
-                                 VerticalItemSpacing="5" />
-            </CollectionView.ItemsLayout>
-            <CollectionView.ItemTemplate>
-                <DataTemplate>
-                    <Frame Padding="15"
-                           Margin="5"
-                           CornerRadius="10"
-                           HasShadow="True"
-                           BackgroundColor="{Binding BackgroundColor}"
-                           BorderColor="{Binding BorderColor}">
-                        <HorizontalStackLayout Spacing="20"  
-                                               VerticalOptions="Center"
-                                               HorizontalOptions="FillAndExpand">
-                            <Image Source="device_icon.png"
-                                   HeightRequest="60"
-                                   WidthRequest="60"
-                                   VerticalOptions="Center"
-                                   HorizontalOptions="Start"
-                                   Aspect="AspectFit"/>
-                            <VerticalStackLayout VerticalOptions="Center"
-                                                 HorizontalOptions="StartAndExpand"
-                                                 Spacing="10" 
-                                                 Margin="10,0,0,0">
-                                <Label Text="{Binding Serial}"
-                                       FontAttributes="Bold"
-                                       FontSize="16"
-                                       TextColor="{DynamicResource AccentColor}"
-                                       HorizontalOptions="Start" />
-                                <Label Text="{Binding Model}"
-                                       FontSize="14"
-                                       TextColor="{DynamicResource TextSecondaryColor}"
-                                       HorizontalOptions="Start" />
-                            </VerticalStackLayout>
-                        </HorizontalStackLayout>
-
-                        <Frame.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnDeviceTapped" />
-                        </Frame.GestureRecognizers>
-                    </Frame>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
     </Grid>
-    
-    
 </ContentPage>

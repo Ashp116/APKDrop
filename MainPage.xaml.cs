@@ -2,11 +2,38 @@
 using System.ComponentModel;
 using System.Diagnostics;
 
-
 namespace APKDrop;
 
-public partial class MainPage : ContentPage
+public partial class MainPage : ContentPage, INotifyPropertyChanged
 {
+    private bool isLoading;
+    public bool IsLoading
+    {
+        get => isLoading;
+        set
+        {
+            if (isLoading != value)
+            {
+                isLoading = value;
+                OnPropertyChanged(nameof(IsLoading));
+            }
+        }
+    }
+
+    private double loadingProgress;
+    public double LoadingProgress
+    {
+        get => loadingProgress;
+        set
+        {
+            if (loadingProgress != value)
+            {
+                loadingProgress = value;
+                OnPropertyChanged(nameof(LoadingProgress));
+            }
+        }
+    }
+
     private string selectedApkPath;
     public ObservableCollection<DeviceInfo> Devices { get; set; } = new();
 
@@ -15,6 +42,25 @@ public partial class MainPage : ContentPage
         InitializeComponent();
         BindingContext = this;
         LoadConnectedDevices();
+    }
+
+    public async Task LoadDataAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            LoadingProgress = 0;
+
+            for (int i = 1; i <= 10; i++)
+            {
+                await Task.Delay(300); // simulate work
+                LoadingProgress = i / 10.0;
+            }
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     private async void OnSelectApkClicked(object sender, EventArgs e)
@@ -36,35 +82,49 @@ public partial class MainPage : ContentPage
         }
         else
         {
-            ApkPathLabel.Text = selectedApkPath != "" ? $"Selected APK: {selectedApkPath}" : "No APK selected.";
+            ApkPathLabel.Text = !string.IsNullOrEmpty(selectedApkPath) ? $"Selected APK: {selectedApkPath}" : "No APK selected.";
         }
     }
-    
+
     private async void OnPushClicked(object sender, EventArgs e)
     {
         var selectedDevices = Devices.Where(d => d.IsSelected).ToList();
-        
-        int successPushes = 0;
-        foreach (var device in selectedDevices)
+        if (selectedDevices.Count == 0 || string.IsNullOrEmpty(selectedApkPath))
         {
-            var success = AdbHelper.PushAppInstall(device.Serial, selectedApkPath);
-            if (success)
-            {
-                successPushes++;
-            }
-            else
-            {
-                await DisplayAlert("Failed", $"Could not push to {device.Serial}", "OK");
-            }
+            await DisplayAlert("Error", "Select at least one device and an APK.", "OK");
+            return;
         }
-        
-        if (successPushes > 0)
-            await DisplayAlert("Success", $"Pushed to {successPushes} devices!", "OK");
+
+        try
+        {
+            IsLoading = true;
+            LoadingProgress = 0;
+
+            int successPushes = 0;
+            int total = selectedDevices.Count;
+
+            for (int i = 0; i < total; i++)
+            {
+                var device = selectedDevices[i];
+                bool success = await Task.Run(() => AdbHelper.PushAppInstall(device.Serial, selectedApkPath));
+                if (success) successPushes++;
+
+                LoadingProgress = (i + 1) / (double)total;
+                await Task.Delay(100); // optional small delay to show progress
+            }
+
+            if (successPushes > 0)
+                await DisplayAlert("Success", $"Pushed to {successPushes} devices!", "OK");
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     private void LoadConnectedDevices()
     {
-        var adbDevices = AdbHelper.ListDevices(); // Replace with your actual ADB helper method
+        var adbDevices = AdbHelper.ListDevices(); // your ADB helper method
         Devices.Clear();
 
         foreach (var device in adbDevices)
@@ -72,6 +132,7 @@ public partial class MainPage : ContentPage
             Devices.Add(new DeviceInfo
             {
                 Serial = device.SerialNumber,
+                DeviceName = device.DeviceName,
                 Model = device.Model
             });
         }
@@ -80,19 +141,15 @@ public partial class MainPage : ContentPage
     private void OnSelectAllClicked(object sender, EventArgs e)
     {
         foreach (var device in Devices)
-        {
             device.IsSelected = true;
-        }
     }
 
     private void OnDeselectAllClicked(object sender, EventArgs e)
     {
         foreach (var device in Devices)
-        {
             device.IsSelected = false;
-        }
     }
-    
+
     private void OnRefreshClicked(object sender, EventArgs e)
     {
         LoadConnectedDevices();
@@ -100,17 +157,14 @@ public partial class MainPage : ContentPage
 
     private void OnDeviceTapped(object sender, EventArgs e)
     {
-        if (sender is Frame tappedFrame)
+        if (sender is Frame tappedFrame && tappedFrame.BindingContext is DeviceInfo device)
         {
-            // Find the device associated with the tapped frame (you can access the device from the BindingContext of the frame)
-            var device = tappedFrame.BindingContext as DeviceInfo;
-        
-            if (device != null)
-            {
-                // Toggle the IsSelected property to allow multi-selection
-                device.IsSelected = !device.IsSelected;
-            }
+            device.IsSelected = !device.IsSelected;
         }
     }
 
+    // PropertyChanged support
+    public new event PropertyChangedEventHandler? PropertyChanged;
+    protected virtual void OnPropertyChanged(string propertyName) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }

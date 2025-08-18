@@ -7,6 +7,7 @@ namespace APKDrop;
 public class DeviceInfo : INotifyPropertyChanged
 {
     public string Serial { get; set; }
+    public string DeviceName { get; set; }
     public string Model { get; set; }
 
     private bool isSelected;

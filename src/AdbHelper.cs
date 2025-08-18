@@ -7,6 +7,7 @@ public class AdbDevice
     public string SerialNumber { get; set; }
     public string ProductName { get; set; }
     public string Model {get; set;}
+    public string DeviceName { get; set; }
 }
 
 public static class AdbHelper
@@ -48,12 +49,27 @@ public static class AdbHelper
 
             keyValuePairs.TryGetValue("model", out var model);
             keyValuePairs.TryGetValue("product", out var product);
+            
+            var deviceNameInfo = new ProcessStartInfo
+            {
+                FileName = adbPath,
+                Arguments = $"-s {serial} shell settings get global device_name",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            
+            using var deviceNameInfoProcess = Process.Start(deviceNameInfo);
+            var deviceNameoutput = deviceNameInfoProcess.StandardOutput.ReadToEnd();
+            process.WaitForExit();
 
+            var deviceNameOutputClean = deviceNameoutput.Split('\n').FirstOrDefault()?.Trim() ?? "unknown";
             if (!string.IsNullOrEmpty(serial))
             {
                 devices.Add(new AdbDevice
                 {
                     SerialNumber = serial,
+                    DeviceName = deviceNameOutputClean,
                     ProductName = product ?? "unknown",
                     Model = model ?? "unknown"
                 });

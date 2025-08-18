@@ -31,7 +31,7 @@
                     CornerRadius="8"
                     HeightRequest="50"
                     HorizontalOptions="FillAndExpand" 
-                    IsEnabled="False" />
+                    IsVisible="False" />
             </Grid>
 
             <!-- APK Path -->

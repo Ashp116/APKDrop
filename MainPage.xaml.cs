@@ -63,7 +63,7 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         if (result != null)
         {
             selectedApkPath = result.FullPath;
-            PushButton.IsEnabled = true;
+            PushButton.IsVisible = true;
             ApkPathLabel.Text = $"Selected APK: {selectedApkPath}";
         }
         else

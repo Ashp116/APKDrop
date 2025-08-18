@@ -49,6 +49,16 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         });
     }
     
+    private void OnCopyApkPathClicked(object sender, EventArgs e)
+    {
+        if (!string.IsNullOrEmpty(selectedApkPath))
+        {
+            Clipboard.Default.SetTextAsync(selectedApkPath);
+            DisplayAlert("Copied", "APK path copied to clipboard!", "OK");
+        }
+    }
+
+    
     private async void OnSelectApkClicked(object sender, EventArgs e)
     {
         var result = await FilePicker.PickAsync(new PickOptions
@@ -64,11 +74,12 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         {
             selectedApkPath = result.FullPath;
             PushButton.IsVisible = true;
-            ApkPathLabel.Text = $"Selected APK: {selectedApkPath}";
+            ApkPathButton.IsEnabled = true;
+            ApkPathButton.Text = $"Selected APK: {selectedApkPath}";
         }
         else
         {
-            ApkPathLabel.Text = !string.IsNullOrEmpty(selectedApkPath) ? $"Selected APK: {selectedApkPath}" : "No APK selected.";
+            ApkPathButton.Text = !string.IsNullOrEmpty(selectedApkPath) ? $"Selected APK: {selectedApkPath}" : "No APK selected.";
         }
     }
 

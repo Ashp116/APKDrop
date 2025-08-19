@@ -18,12 +18,12 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Install WiX Toolset v6.0.1 CLI
+      - name: Install Chocolatey
         run: |
-          Invoke-WebRequest -Uri https://github.com/wixtoolset/wix/releases/download/v6.0.1/wix-6.0.1.zip -OutFile wix.zip
-          Expand-Archive wix.zip -DestinationPath $Env:ProgramFiles\WiX
-          Remove-Item wix.zip
-          $env:PATH = "$Env:ProgramFiles\WiX;$env:PATH"
+          Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+      - name: Install WiX Toolset v6.0.1
+        run: choco install wixtoolset --version=6.0.1 -y
 
       - name: Publish MAUI Application
         run: |

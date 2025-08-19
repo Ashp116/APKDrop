@@ -32,7 +32,7 @@ jobs:
 
       - name: Publish MAUI Application
         run: |
-          dotnet publish ./src/MyMauiApp/MyMauiApp.csproj -c Release -r win-x64 --output $Env:BUILD_OUTPUT
+          dotnet publish ./src/APKDrop.csproj -c Release -r win-x64 --output $Env:BUILD_OUTPUT
 
       - name: Compile Product.wxs
         run: |

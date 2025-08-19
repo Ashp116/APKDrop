@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
 
+env:
+  BUILD_OUTPUT: ./publish
+  MSI_NAME: APKDrop.msi
+  EXE_NAME: APKDrop.exe
+
 jobs:
   build:
     runs-on: windows-latest
@@ -20,22 +25,24 @@ jobs:
 
       - name: Install Chocolatey
         run: |
-          Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+          Set-ExecutionPolicy Bypass -Scope Process -Force; \
+          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
+          iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 
       - name: Install WiX Toolset v6.0.1
-        run: choco install wixtoolset
+        run: choco install wixtoolset --version=6.0.1 -y
 
       - name: Publish MAUI Application
         run: |
-          dotnet publish ./src/MyMauiApp/MyMauiApp.csproj -c Release -r win-x64 --output "${{ vars.BUILD_OUTPUT }}"
+          dotnet publish ./src/MyMauiApp/MyMauiApp.csproj -c Release -r win-x64 --output $Env:BUILD_OUTPUT
 
       - name: Compile Product.wxs
         run: |
-          candle.exe ./installer/Product.wxs -dSourcePath="${{ vars.BUILD_OUTPUT }}"
+          candle.exe ./installer/Product.wxs -dSourcePath=$Env:BUILD_OUTPUT
 
       - name: Link Product MSI
         run: |
-          light.exe Product.wixobj -out "./artifacts/${{ vars.MSI_NAME }}"
+          light.exe Product.wixobj -out "./artifacts/$Env:MSI_NAME"
 
       - name: Compile Bundle.wxs
         run: |
@@ -43,11 +50,11 @@ jobs:
 
       - name: Link Bootstrapper EXE
         run: |
-          light.exe Bundle.wixobj -ext WixBalExtension -out "./artifacts/${{ vars.EXE_NAME }}"
+          light.exe Bundle.wixobj -ext WixBalExtension -out "./artifacts/$Env:EXE_NAME"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: "./artifacts/${{ vars.EXE_NAME }}"
+          files: "./artifacts/$Env:EXE_NAME"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

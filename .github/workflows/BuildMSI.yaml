@@ -18,11 +18,12 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Install WiX Toolset v6.0.1
+      - name: Install WiX Toolset v6.0.1 CLI
         run: |
-          Invoke-WebRequest -Uri https://github.com/wixtoolset/wix/releases/download/v6.0.1/wix-cli-x64.msi -OutFile wix-cli-x64.msi
-          Start-Process -FilePath wix-cli-x64.msi -ArgumentList '/quiet' -NoNewWindow -Wait
-          Remove-Item wix-cli-x64.msi
+          Invoke-WebRequest -Uri https://github.com/wixtoolset/wix/releases/download/v6.0.1/wix-6.0.1.zip -OutFile wix.zip
+          Expand-Archive wix.zip -DestinationPath $Env:ProgramFiles\WiX
+          Remove-Item wix.zip
+          $env:PATH = "$Env:ProgramFiles\WiX;$env:PATH"
 
       - name: Publish MAUI Application
         run: |

@@ -1,58 +1,284 @@
-name: Build MAUI Installer
+name: Build .NET MAUI App to MSI
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 env:
-  BUILD_OUTPUT: ./publish
-  MSI_NAME: APKDrop.msi
-  EXE_NAME: APKDrop.exe
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_PATH: 'APKDrop.csproj'  # Update this path
+  MAUI_PROJECT_PATH: 'APKDrop.csproj'  # Update this path
+  SOLUTION_PATH: 'APKDrop.sln'  # Update this path
+  BUILD_CONFIGURATION: 'Release'
+  APP_NAME: 'APKDrop'  # Update this
 
 jobs:
-  build:
+  build-msi:
     runs-on: windows-latest
-
+    
     steps:
-      - name: Checkout Repository
+      - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set Up .NET SDK
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Install Chocolatey
+      - name: Install .NET MAUI workload
+        run: dotnet workload install maui
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Get version from tag or use default
+        id: version
+        shell: pwsh
         run: |
-          Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+          if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') {
+            $version = $matches[1]
+            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+            echo "Using tag version: $version"
+          } else {
+            $version = "1.0.0-ci.$env:GITHUB_RUN_NUMBER"
+            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+            echo "Using CI version: $version"
+          }
 
-      - name: Install WiX Toolset v6.0.1
-        run: choco install wixtoolset -y
-
-      - name: Publish MAUI Application
+      - name: Build MAUI Windows App
         run: |
-          dotnet publish ./APKDrop.csproj -c Release -r win-x64 --output $Env:BUILD_OUTPUT
+          dotnet publish ${{ env.MAUI_PROJECT_PATH }} `
+            -c ${{ env.BUILD_CONFIGURATION }} `
+            -f net8.0-windows10.0.19041.0 `
+            -p:PublishProfile=win10-x64 `
+            -p:PackageCertificateThumbprint="" `
+            -p:AppxPackageSigningEnabled=false `
+            -p:RuntimeIdentifier=win10-x64 `
+            -p:PublishSingleFile=false `
+            -p:PublishReadyToRun=false `
+            -p:Version=${{ steps.version.outputs.VERSION }} `
+            --output ./publish
 
-      - name: Compile Product.wxs
+      - name: Install WiX Toolset
         run: |
-          candle.exe ./installer/Product.wxs -dSourcePath=$Env:BUILD_OUTPUT
+          # Download and install WiX v4
+          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix4/releases/download/v4.0.4/wix-4.0.4.exe" -OutFile "wix-installer.exe"
+          Start-Process -FilePath "wix-installer.exe" -ArgumentList "/quiet" -Wait
 
-      - name: Link Product MSI
+      - name: Create WiX installer project
+        shell: pwsh
         run: |
-          light.exe Product.wixobj -out "./artifacts/$Env:MSI_NAME"
+          $wxsContent = @"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+            <Package Name="${{ env.APP_NAME }}" 
+                     Version="${{ steps.version.outputs.VERSION }}" 
+                     Manufacturer="Your Company Name"
+                     UpgradeCode="12345678-1234-1234-1234-123456789012">
+          
+              <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+              <MediaTemplate EmbedCab="yes" />
+          
+              <Feature Id="ProductFeature" Title="${{ env.APP_NAME }}" Level="1">
+                <ComponentGroupRef Id="ProductComponents" />
+              </Feature>
+            </Package>
+          
+            <Fragment>
+              <Directory Id="TARGETDIR" Name="SourceDir">
+                <Directory Id="ProgramFilesFolder">
+                  <Directory Id="INSTALLFOLDER" Name="${{ env.APP_NAME }}" />
+                </Directory>
+              </Directory>
+            </Fragment>
+          
+            <Fragment>
+              <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+                <!-- Main executable -->
+                <Component Id="MainExecutable">
+                  <File Source="publish\${{ env.APP_NAME }}.exe" />
+                </Component>
+          
+                <!-- Add all other files from publish directory -->
+                <Component Id="AllFiles">
+                  <File Source="publish\*" />
+                </Component>
+              </ComponentGroup>
+            </Fragment>
+          </Wix>
+          "@
+          
+          $wxsContent | Out-File -FilePath "installer.wxs" -Encoding utf8
 
-      - name: Compile Bundle.wxs
+      - name: Create advanced WiX installer (Alternative approach)
+        shell: pwsh
         run: |
-          candle.exe ./installer/Bundle.wxs
+          # Create a more comprehensive WiX file
+          $advancedWxs = @"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+            <Package Name="${{ env.APP_NAME }}" 
+                     Version="${{ steps.version.outputs.VERSION }}" 
+                     Manufacturer="Your Company Name"
+                     UpgradeCode="12345678-1234-1234-1234-123456789012"
+                     Language="1033"
+                     Codepage="1252">
+          
+              <SummaryInformation Manufacturer="Your Company Name" 
+                                Description="${{ env.APP_NAME }} Installer" />
+          
+              <MajorUpgrade Schedule="afterInstallInitialize"
+                           DowngradeErrorMessage="A newer version of [ProductName] is already installed."
+                           AllowSameVersionUpgrades="yes" />
+          
+              <MediaTemplate EmbedCab="yes" />
+          
+              <Feature Id="ProductFeature" Title="${{ env.APP_NAME }}" Level="1">
+                <ComponentGroupRef Id="ProductComponents" />
+              </Feature>
+          
+              <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+              <UIRef Id="WixUI_InstallDir" />
+            </Package>
+          
+            <Fragment>
+              <Directory Id="TARGETDIR" Name="SourceDir">
+                <Directory Id="ProgramFilesFolder">
+                  <Directory Id="INSTALLFOLDER" Name="${{ env.APP_NAME }}" />
+                </Directory>
+                <Directory Id="ProgramMenuFolder">
+                  <Directory Id="ApplicationProgramsFolder" Name="${{ env.APP_NAME }}" />
+                </Directory>
+                <Directory Id="DesktopFolder" Name="Desktop" />
+              </Directory>
+            </Fragment>
+          
+            <Fragment>
+              <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+                <Component Id="MainExecutable" Guid="*">
+                  <File Id="MainExe" 
+                        Source="publish\${{ env.APP_NAME }}.exe" 
+                        KeyPath="yes">
+                    <Shortcut Id="ApplicationStartMenuShortcut" 
+                             Directory="ApplicationProgramsFolder" 
+                             Name="${{ env.APP_NAME }}" 
+                             WorkingDirectory="INSTALLFOLDER" 
+                             Icon="AppIcon.exe" 
+                             IconIndex="0" />
+                    <Shortcut Id="ApplicationDesktopShortcut" 
+                             Directory="DesktopFolder" 
+                             Name="${{ env.APP_NAME }}" 
+                             WorkingDirectory="INSTALLFOLDER" 
+                             Icon="AppIcon.exe" 
+                             IconIndex="0" />
+                  </File>
+                </Component>
+          
+                <Component Id="CleanupMainApplicationFolder" Guid="*">
+                  <RegistryValue Root="HKCU" 
+                               Key="Software\[Manufacturer]\[ProductName]" 
+                               Name="installed" 
+                               Type="integer" 
+                               Value="1" 
+                               KeyPath="yes" />
+                  <RemoveFolder Id="INSTALLFOLDER" On="uninstall" />
+                  <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+                </Component>
+              </ComponentGroup>
+          
+              <Icon Id="AppIcon.exe" SourceFile="publish\${{ env.APP_NAME }}.exe" />
+            </Fragment>
+          </Wix>
+          "@
+          
+          $advancedWxs | Out-File -FilePath "advanced-installer.wxs" -Encoding utf8
 
-      - name: Link Bootstrapper EXE
+      - name: Build MSI installer
+        shell: pwsh
         run: |
-          light.exe Bundle.wixobj -ext WixBalExtension -out "./artifacts/$Env:EXE_NAME"
+          # Add WiX to PATH
+          $env:PATH += ";C:\Program Files (x86)\WiX Toolset v4\bin"
+          
+          # Build the MSI
+          wix build advanced-installer.wxs -ext WixToolset.UI.wixext -out "${{ env.APP_NAME }}-${{ steps.version.outputs.VERSION }}.msi"
 
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: "./artifacts/$Env:EXE_NAME"
+          name: msi-installer
+          path: "*.msi"
+          retention-days: 30
+
+      - name: Create Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: "*.msi"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Alternative job using advanced installer or other tools
+  build-msi-advanced:
+    runs-on: windows-latest
+    if: false  # Set to true to enable this alternative approach
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install .NET MAUI workload
+        run: dotnet workload install maui
+
+      - name: Build MAUI App
+        run: |
+          dotnet publish ${{ env.MAUI_PROJECT_PATH }} `
+            -c ${{ env.BUILD_CONFIGURATION }} `
+            -f net8.0-windows10.0.19041.0 `
+            -p:RuntimeIdentifier=win10-x64 `
+            --self-contained true `
+            --output ./publish
+
+      - name: Install Advanced Installer
+        run: |
+          # Download and install Advanced Installer
+          Invoke-WebRequest -Uri "https://www.advancedinstaller.com/downloads/advinst.msi" -OutFile "advinst.msi"
+          Start-Process -FilePath "msiexec.exe" -ArgumentList "/i advinst.msi /quiet" -Wait
+
+      - name: Create Advanced Installer Project
+        shell: pwsh
+        run: |
+          # Create Advanced Installer project file
+          $aiProject = @"
+          <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <DOCUMENT Type="Advanced Installer" CreateVersion="20.0" version="20.0" Modules="simple" RootPath="." Language="en" Id="{12345678-1234-1234-1234-123456789012}">
+            <COMPONENT cid="caphyon.advinst.msicomp.ProjectOptionsComponent">
+              <ROW Name="HiddenItems" Value="AppXProductDetailsComponent;AppXDependenciesComponent;AppXAppDeclarationsComponent;AppXCapabilitiesComponent;AppXAppExtensionsComponent;AppXProtocolsComponent;AppXFileTypesComponent;AppXDeployOptionsComponent"/>
+            </COMPONENT>
+            <COMPONENT cid="caphyon.advinst.msicomp.MsiPropsComponent">
+              <ROW Property="ProductCode" Value="1033:{12345678-1234-1234-1234-123456789012} "/>
+              <ROW Property="ProductName" Value="${{ env.APP_NAME }}"/>
+              <ROW Property="ProductVersion" Value="${{ steps.version.outputs.VERSION }}"/>
+              <ROW Property="Manufacturer" Value="Your Company Name"/>
+            </COMPONENT>
+          </DOCUMENT>
+          "@
+          
+          $aiProject | Out-File -FilePath "project.aip" -Encoding utf8
+
+      - name: Build with Advanced Installer
+        run: |
+          & "C:\Program Files (x86)\Caphyon\Advanced Installer 20.0\bin\x86\AdvancedInstaller.com" /build project.aip

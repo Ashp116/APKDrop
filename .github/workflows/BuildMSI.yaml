@@ -32,7 +32,9 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Install .NET MAUI workload
-        run: dotnet workload install maui
+        run: |
+          dotnet workload update
+          dotnet workload install maui --skip-manifest-update
 
       - name: Restore dependencies
         run: dotnet restore ${{ env.SOLUTION_PATH }}
@@ -51,6 +53,10 @@ jobs:
             echo "Using CI version: $version"
           }
 
+      - name: Check project target frameworks
+        run: |
+          dotnet list ${{ env.MAUI_PROJECT_PATH }} frameworks
+
       - name: Build MAUI Windows App
         run: |
           dotnet publish ${{ env.MAUI_PROJECT_PATH }} `
@@ -60,8 +66,12 @@ jobs:
             -p:PublishSingleFile=false `
             -p:PublishReadyToRun=false `
             -p:SelfContained=true `
+            -p:UseMonoRuntime=false `
+            -p:UseMauiEssentials=true `
             -p:Version=${{ steps.version.outputs.VERSION }} `
             -p:UseAppHost=true `
+            -p:PublishTrimmed=false `
+            --verbosity normal `
             --output ./publish
 
       - name: Install WiX Toolset

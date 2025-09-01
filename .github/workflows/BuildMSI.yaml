@@ -2,17 +2,17 @@ name: Build .NET MAUI App to MSI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
 
 env:
-  DOTNET_VERSION: '8.0.x'
-  PROJECT_PATH: 'APKDrop.csproj'  # Update this path
-  MAUI_PROJECT_PATH: 'APKDrop.csproj'  # Update this path
-  SOLUTION_PATH: 'APKDrop.sln'  # Update this path
+  DOTNET_VERSION: '9.0.x'
+  PROJECT_PATH: 'APKDrop.csproj'  # Update this path if different
+  MAUI_PROJECT_PATH: 'APKDrop.csproj'  # Update this path if different
+  SOLUTION_PATH: 'APKDrop.sln'  # Update this path if different
   BUILD_CONFIGURATION: 'Release'
   APP_NAME: 'APKDrop'  # Update this
 
@@ -55,14 +55,13 @@ jobs:
         run: |
           dotnet publish ${{ env.MAUI_PROJECT_PATH }} `
             -c ${{ env.BUILD_CONFIGURATION }} `
-            -f net8.0-windows10.0.19041.0 `
-            -p:PublishProfile=win10-x64 `
-            -p:PackageCertificateThumbprint="" `
-            -p:AppxPackageSigningEnabled=false `
-            -p:RuntimeIdentifier=win10-x64 `
+            -f net9.0-windows10.0.19041.0 `
+            -p:RuntimeIdentifier=win-x64 `
             -p:PublishSingleFile=false `
             -p:PublishReadyToRun=false `
+            -p:SelfContained=true `
             -p:Version=${{ steps.version.outputs.VERSION }} `
+            -p:UseAppHost=true `
             --output ./publish
 
       - name: Install WiX Toolset
@@ -247,8 +246,8 @@ jobs:
         run: |
           dotnet publish ${{ env.MAUI_PROJECT_PATH }} `
             -c ${{ env.BUILD_CONFIGURATION }} `
-            -f net8.0-windows10.0.19041.0 `
-            -p:RuntimeIdentifier=win10-x64 `
+            -f net9.0-windows10.0.19041.0 `
+            -p:RuntimeIdentifier=win-x64 `
             --self-contained true `
             --output ./publish
 

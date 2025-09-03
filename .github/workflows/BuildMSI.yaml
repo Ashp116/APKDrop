@@ -1,293 +1,200 @@
-name: Build .NET MAUI App to MSI
+name: Build and Release MSI
 
 on:
   push:
-    branches: [ main, develop ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
-
-env:
-  DOTNET_VERSION: '9.0.x'
-  PROJECT_PATH: 'APKDrop.csproj'  # Update this path if different
-  MAUI_PROJECT_PATH: 'APKDrop.csproj'  # Update this path if different
-  SOLUTION_PATH: 'APKDrop.sln'  # Update this path if different
-  BUILD_CONFIGURATION: 'Release'
-  APP_NAME: 'APKDrop'  # Update this
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual trigger
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
 
 jobs:
-  build-msi:
+  build-and-release:
     runs-on: windows-latest
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Fetch full history for proper versioning
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: '8.0.x'  # Adjust to your .NET version
 
-      - name: Install .NET MAUI workload
-        run: |
-          dotnet workload update
-          dotnet workload install maui --skip-manifest-update
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
 
       - name: Restore dependencies
-        run: dotnet restore ${{ env.SOLUTION_PATH }}
+        run: dotnet restore
 
-      - name: Get version from tag or use default
-        id: version
-        shell: pwsh
+      - name: Get version from tag or input
+        id: get_version
         run: |
-          if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') {
-            $version = $matches[1]
-            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-            echo "Using tag version: $version"
+          if ("${{ github.event_name }}" -eq "push") {
+            $version = "${{ github.ref_name }}"
           } else {
-            $version = "1.0.0-ci.$env:GITHUB_RUN_NUMBER"
-            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-            echo "Using CI version: $version"
+            $version = "${{ github.event.inputs.version }}"
           }
+          $version_number = $version -replace '^v', ''
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "version_number=$version_number" >> $env:GITHUB_OUTPUT
+        shell: powershell
 
-      - name: Check project target frameworks
+      - name: Build application
         run: |
-          dotnet list ${{ env.MAUI_PROJECT_PATH }} frameworks
+          dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version="${{ steps.get_version.outputs.version_number }}" -o ./publish/
 
-      - name: Build MAUI Windows App
+      - name: Setup WiX Toolset
         run: |
-          dotnet publish ${{ env.MAUI_PROJECT_PATH }} `
-            -c ${{ env.BUILD_CONFIGURATION }} `
-            -f net9.0-windows10.0.19041.0 `
-            -p:RuntimeIdentifier=win-x64 `
-            -p:PublishSingleFile=false `
-            -p:PublishReadyToRun=false `
-            -p:SelfContained=true `
-            -p:UseMonoRuntime=false `
-            -p:UseMauiEssentials=true `
-            -p:Version=${{ steps.version.outputs.VERSION }} `
-            -p:UseAppHost=true `
-            -p:PublishTrimmed=false `
-            --verbosity normal `
-            --output ./publish
+          # Download and install WiX Toolset
+          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip" -OutFile "wix.zip"
+          Expand-Archive -Path "wix.zip" -DestinationPath "wix"
+          echo "${{ github.workspace }}\wix" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: powershell
 
-      - name: Install WiX Toolset
+      - name: Create WiX source file
         run: |
-          # Download and install WiX v4
-          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix4/releases/download/v4.0.4/wix-4.0.4.exe" -OutFile "wix-installer.exe"
-          Start-Process -FilePath "wix-installer.exe" -ArgumentList "/quiet" -Wait
-
-      - name: Create WiX installer project
-        shell: pwsh
-        run: |
-          $wxsContent = @"
+          $wxsContent = @'
           <?xml version="1.0" encoding="UTF-8"?>
-          <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-            <Package Name="${{ env.APP_NAME }}" 
-                     Version="${{ steps.version.outputs.VERSION }}" 
-                     Manufacturer="Your Company Name"
+          <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+            <Product Id="*" 
+                     Name="APKDrop" 
+                     Language="1033" 
+                     Version="${{ steps.get_version.outputs.version_number }}"
+                     Manufacturer="APKDrop Team" 
                      UpgradeCode="12345678-1234-1234-1234-123456789012">
           
+              <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
               <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
               <MediaTemplate EmbedCab="yes" />
           
-              <Feature Id="ProductFeature" Title="${{ env.APP_NAME }}" Level="1">
-                <ComponentGroupRef Id="ProductComponents" />
-              </Feature>
-            </Package>
-          
-            <Fragment>
-              <Directory Id="TARGETDIR" Name="SourceDir">
-                <Directory Id="ProgramFilesFolder">
-                  <Directory Id="INSTALLFOLDER" Name="${{ env.APP_NAME }}" />
-                </Directory>
-              </Directory>
-            </Fragment>
-          
-            <Fragment>
-              <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-                <!-- Main executable -->
-                <Component Id="MainExecutable">
-                  <File Source="publish\${{ env.APP_NAME }}.exe" />
-                </Component>
-          
-                <!-- Add all other files from publish directory -->
-                <Component Id="AllFiles">
-                  <File Source="publish\*" />
-                </Component>
-              </ComponentGroup>
-            </Fragment>
-          </Wix>
-          "@
-          
-          $wxsContent | Out-File -FilePath "installer.wxs" -Encoding utf8
-
-      - name: Create advanced WiX installer (Alternative approach)
-        shell: pwsh
-        run: |
-          # Create a more comprehensive WiX file
-          $advancedWxs = @"
-          <?xml version="1.0" encoding="UTF-8"?>
-          <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-            <Package Name="${{ env.APP_NAME }}" 
-                     Version="${{ steps.version.outputs.VERSION }}" 
-                     Manufacturer="Your Company Name"
-                     UpgradeCode="12345678-1234-1234-1234-123456789012"
-                     Language="1033"
-                     Codepage="1252">
-          
-              <SummaryInformation Manufacturer="Your Company Name" 
-                                Description="${{ env.APP_NAME }} Installer" />
-          
-              <MajorUpgrade Schedule="afterInstallInitialize"
-                           DowngradeErrorMessage="A newer version of [ProductName] is already installed."
-                           AllowSameVersionUpgrades="yes" />
-          
-              <MediaTemplate EmbedCab="yes" />
-          
-              <Feature Id="ProductFeature" Title="${{ env.APP_NAME }}" Level="1">
+              <Feature Id="ProductFeature" Title="APKDrop" Level="1">
                 <ComponentGroupRef Id="ProductComponents" />
               </Feature>
           
-              <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-              <UIRef Id="WixUI_InstallDir" />
-            </Package>
-          
-            <Fragment>
               <Directory Id="TARGETDIR" Name="SourceDir">
                 <Directory Id="ProgramFilesFolder">
-                  <Directory Id="INSTALLFOLDER" Name="${{ env.APP_NAME }}" />
+                  <Directory Id="INSTALLFOLDER" Name="APKDrop" />
                 </Directory>
                 <Directory Id="ProgramMenuFolder">
-                  <Directory Id="ApplicationProgramsFolder" Name="${{ env.APP_NAME }}" />
+                  <Directory Id="ApplicationProgramsFolder" Name="APKDrop"/>
                 </Directory>
-                <Directory Id="DesktopFolder" Name="Desktop" />
               </Directory>
-            </Fragment>
           
-            <Fragment>
               <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
                 <Component Id="MainExecutable" Guid="*">
-                  <File Id="MainExe" 
-                        Source="publish\${{ env.APP_NAME }}.exe" 
-                        KeyPath="yes">
+                  <File Id="MainExe" Source="publish\APKDrop.exe" KeyPath="yes">
                     <Shortcut Id="ApplicationStartMenuShortcut" 
                              Directory="ApplicationProgramsFolder" 
-                             Name="${{ env.APP_NAME }}" 
+                             Name="APKDrop" 
                              WorkingDirectory="INSTALLFOLDER" 
-                             Icon="AppIcon.exe" 
-                             IconIndex="0" />
-                    <Shortcut Id="ApplicationDesktopShortcut" 
-                             Directory="DesktopFolder" 
-                             Name="${{ env.APP_NAME }}" 
-                             WorkingDirectory="INSTALLFOLDER" 
-                             Icon="AppIcon.exe" 
-                             IconIndex="0" />
+                             Icon="ProductIcon" 
+                             IconIndex="0" 
+                             Advertise="yes" />
                   </File>
                 </Component>
-          
-                <Component Id="CleanupMainApplicationFolder" Guid="*">
-                  <RegistryValue Root="HKCU" 
-                               Key="Software\[Manufacturer]\[ProductName]" 
-                               Name="installed" 
-                               Type="integer" 
-                               Value="1" 
-                               KeyPath="yes" />
-                  <RemoveFolder Id="INSTALLFOLDER" On="uninstall" />
-                  <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+                <!-- Add more components for additional files -->
+                <Component Id="ConfigFiles" Guid="*">
+                  <File Id="AppConfig" Source="publish\APKDrop.dll.config" KeyPath="yes" />
                 </Component>
               </ComponentGroup>
           
-              <Icon Id="AppIcon.exe" SourceFile="publish\${{ env.APP_NAME }}.exe" />
-            </Fragment>
+              <Icon Id="ProductIcon" SourceFile="publish\APKDrop.exe" />
+              <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
+              <Property Id="ARPHELPLINK" Value="https://github.com/Ashp116/APKDrop" />
+          
+              <UI>
+                <UIRef Id="WixUI_InstallDir" />
+              </UI>
+              <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+            </Product>
           </Wix>
-          "@
-          
-          $advancedWxs | Out-File -FilePath "advanced-installer.wxs" -Encoding utf8
+          '@
+          $wxsContent | Out-File -FilePath "APKDrop.wxs" -Encoding utf8
+        shell: powershell
 
-      - name: Build MSI installer
-        shell: pwsh
+      - name: Create license file for installer
         run: |
-          # Add WiX to PATH
-          $env:PATH += ";C:\Program Files (x86)\WiX Toolset v4\bin"
+          $licenseContent = @'
+          {\rtf1\ansi\deff0 {\fonttbl {\f0 Times New Roman;}}
+          \f0\fs20
+          MIT License
           
-          # Build the MSI
-          wix build advanced-installer.wxs -ext WixToolset.UI.wixext -out "${{ env.APP_NAME }}-${{ steps.version.outputs.VERSION }}.msi"
+          Copyright (c) 2024 APKDrop
+          
+          Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+          
+          The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+          
+          THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+          }
+          '@
+          $licenseContent | Out-File -FilePath "license.rtf" -Encoding utf8
+        shell: powershell
 
-      - name: Upload MSI artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: msi-installer
-          path: "*.msi"
-          retention-days: 30
+      - name: Build MSI
+        run: |
+          candle.exe -arch x64 APKDrop.wxs -out APKDrop.wixobj
+          light.exe -ext WixUIExtension APKDrop.wixobj -out "APKDrop-${{ steps.get_version.outputs.version }}.msi"
+        shell: powershell
 
-      - name: Create Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: "*.msi"
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+      - name: Generate changelog
+        id: changelog
+        run: |
+          $changelog = ""
+          if (Test-Path "CHANGELOG.md") {
+            # Extract changelog section for this version
+            $content = Get-Content "CHANGELOG.md" -Raw
+            $pattern = "## \[${{ steps.get_version.outputs.version_number }}\].*?(?=## \[|\z)"
+            $match = [regex]::Match($content, $pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+            if ($match.Success) {
+              $changelog = $match.Value
+            }
+          }
+          if ($changelog -eq "") {
+            $changelog = "Release ${{ steps.get_version.outputs.version }}"
+          }
+          # Escape newlines and quotes for GitHub Actions
+          $changelog = $changelog -replace "`r`n", "%0A" -replace "`n", "%0A" -replace '"', '\"'
+          echo "changelog=$changelog" >> $env:GITHUB_OUTPUT
+        shell: powershell
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Alternative job using advanced installer or other tools
-  build-msi-advanced:
-    runs-on: windows-latest
-    if: false  # Set to true to enable this alternative approach
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          tag_name: ${{ steps.get_version.outputs.version }}
+          release_name: APKDrop ${{ steps.get_version.outputs.version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
 
-      - name: Install .NET MAUI workload
-        run: dotnet workload install maui
+      - name: Upload MSI to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./APKDrop-${{ steps.get_version.outputs.version }}.msi
+          asset_name: APKDrop-${{ steps.get_version.outputs.version }}.msi
+          asset_content_type: application/octet-stream
 
-      - name: Build MAUI App
-        run: |
-          dotnet publish ${{ env.MAUI_PROJECT_PATH }} `
-            -c ${{ env.BUILD_CONFIGURATION }} `
-            -f net9.0-windows10.0.19041.0 `
-            -p:RuntimeIdentifier=win-x64 `
-            --self-contained true `
-            --output ./publish
-
-      - name: Install Advanced Installer
-        run: |
-          # Download and install Advanced Installer
-          Invoke-WebRequest -Uri "https://www.advancedinstaller.com/downloads/advinst.msi" -OutFile "advinst.msi"
-          Start-Process -FilePath "msiexec.exe" -ArgumentList "/i advinst.msi /quiet" -Wait
-
-      - name: Create Advanced Installer Project
-        shell: pwsh
-        run: |
-          # Create Advanced Installer project file
-          $aiProject = @"
-          <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-          <DOCUMENT Type="Advanced Installer" CreateVersion="20.0" version="20.0" Modules="simple" RootPath="." Language="en" Id="{12345678-1234-1234-1234-123456789012}">
-            <COMPONENT cid="caphyon.advinst.msicomp.ProjectOptionsComponent">
-              <ROW Name="HiddenItems" Value="AppXProductDetailsComponent;AppXDependenciesComponent;AppXAppDeclarationsComponent;AppXCapabilitiesComponent;AppXAppExtensionsComponent;AppXProtocolsComponent;AppXFileTypesComponent;AppXDeployOptionsComponent"/>
-            </COMPONENT>
-            <COMPONENT cid="caphyon.advinst.msicomp.MsiPropsComponent">
-              <ROW Property="ProductCode" Value="1033:{12345678-1234-1234-1234-123456789012} "/>
-              <ROW Property="ProductName" Value="${{ env.APP_NAME }}"/>
-              <ROW Property="ProductVersion" Value="${{ steps.version.outputs.VERSION }}"/>
-              <ROW Property="Manufacturer" Value="Your Company Name"/>
-            </COMPONENT>
-          </DOCUMENT>
-          "@
-          
-          $aiProject | Out-File -FilePath "project.aip" -Encoding utf8
-
-      - name: Build with Advanced Installer
-        run: |
-          & "C:\Program Files (x86)\Caphyon\Advanced Installer 20.0\bin\x86\AdvancedInstaller.com" /build project.aip
+      - name: Upload Portable Executable to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./publish/APKDrop.exe
+          asset_name: APKDrop-${{ steps.get_version.outputs.version }}-portable.exe
+          asset_content_type: application/octet-stream

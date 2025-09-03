@@ -50,7 +50,8 @@ jobs:
 
       - name: Build application
         run: |
-          dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version="${{ steps.get_version.outputs.version_number }}" -o ./publish/
+          dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version="${{ steps.get_version.outputs.version_number }}" -o ./publish/ --force --verbosity normal
+        continue-on-error: false
 
       - name: Setup WiX Toolset
         run: |
